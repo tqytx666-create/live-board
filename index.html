@@ -113,6 +113,9 @@ textarea{resize:vertical;min-height:70px}
 .cfab{position:absolute;left:10px;bottom:10px;padding:12px 18px;font-size:15px;background:var(--acc);color:#fff;box-shadow:0 4px 14px #0008}
 .cbanner{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#31240acc;color:var(--gold);border:1px solid var(--gold);padding:8px 14px;border-radius:20px;font-size:13px;white-space:nowrap}
 .cdetail{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;width:min(560px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;z-index:70;box-shadow:0 -4px 24px #000a}
+.home{height:100dvh;display:flex;flex-direction:column}
+.showcard{cursor:pointer;transition:border-color .15s}
+.showcard:hover,.showcard:active{border-color:var(--acc)}
 .ideas-overlay{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;max-width:760px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 22px;border-radius:24px;font-size:15px;z-index:99;backdrop-filter:blur(6px)}
 @media(max-width:900px){.host{grid-template-columns:1fr}.col{display:none}.side{display:none}.stage h2{font-size:26px}.stage .body{font-size:20px}}
@@ -128,14 +131,28 @@ textarea{resize:vertical;min-height:70px}
     <button @click="doLogin">进入</button>
   </div>
 
+  <!-- ============ 场次主页 ============ -->
+  <div class="home" v-else-if="!activeShowId">
+    <div class="mhead"><b>🎬 选择场次</b><button class="logout" @click="logout">⏻ {{roleName(role)}} · 退出</button></div>
+    <div class="mbody" style="max-width:640px;margin:0 auto;width:100%">
+      <div class="card" v-if="canJudge" style="display:flex;gap:8px">
+        <input v-model="newShowName" placeholder="新场次名称，如：8月27日·台球专场" @keyup.enter="createShow">
+        <button class="btn-gold" style="white-space:nowrap;padding:0 16px" @click="createShow">＋ 新建</button>
+      </div>
+      <div class="card showcard" v-for="sh in shows" :key="sh.id" @click="enterShow(sh)">
+        <div style="font-size:17px;font-weight:600">🎬 {{sh.title||('场次'+sh.id)}}</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:4px">{{(sh.created_at||'').slice(0,10)}} · 点击进入</div>
+      </div>
+      <div v-if="!shows.length" style="color:var(--dim);text-align:center;padding:40px 0">还没有场次{{canJudge?'，建一个开始策划':'，等老板/经理创建'}}</div>
+    </div>
+  </div>
+
   <!-- ============ 主播 ============ -->
   <div class="host" v-else-if="role==='host'">
     <div class="col">
       <div style="padding:10px 10px 0;display:flex;flex-direction:column;gap:6px">
-        <select v-model="activeShowId" @change="switchShow">
-          <option v-for="sh in shows" :key="sh.id" :value="sh.id">🎬 {{sh.title||('场次'+sh.id)}}</option>
-        </select>
-        <button class="logout" @click="newShow">＋ 新建场次</button>
+        <div style="font-size:13px;color:var(--gold);font-weight:600;padding:0 4px">🎬 {{curShowTitle}}</div>
+        <button class="logout" @click="backHome">⇄ 切换场次</button>
       </div>
       <h3>直播流程</h3>
       <div v-for="(s,i) in sortedSections" :key="s.id"
@@ -207,13 +224,14 @@ textarea{resize:vertical;min-height:70px}
             <button @pointerdown.stop @click.stop="zoomBy(0.8)">－</button>
             <button @pointerdown.stop @click.stop="cvReset">⊙</button>
           </div>
-          <button class="cfab" v-if="canJudge" @pointerdown.stop @click.stop="exportShow">🎬 导出成场次</button>
+          <button class="cfab" v-if="canJudge" @pointerdown.stop @click.stop="exportShow">📝 导出成讲稿</button>
           <div class="cbanner" v-if="linkMode">{{linkMode.type==='parent'?'🔗 点一张卡作为它的上级':linkMode.type==='next'?'⬇️ 点它的「下一个」卡片':'⬆️ 点它的「上一个」卡片'}}（点空白取消）</div>
           <div class="cbanner" v-else-if="!ideas.length" style="border-color:var(--acc);color:var(--acc)">👆 点击空白处，加第一个话题</div>
         </div>
         </div>
       <div class="sendbox" v-if="ideaFormOpen">
-        <textarea v-model="draftIdea" :placeholder="draftIdeaCat==='话题'?'新话题…（会成为讲稿的一个段落标题）':'内容…'" style="min-height:56px"></textarea>
+        <div v-if="childParent" style="font-size:13px;color:var(--gold)">🔗 挂到「{{childParent.content.slice(0,14)}}」下：</div>
+        <textarea v-model="draftIdea" :placeholder="draftIdeaCat==='话题'?'新话题…（会成为讲稿的一个段落标题）':draftIdeaCat==='话术'?'话术内容…（讲稿里的一页提示文案，可写长）':'水军评论内容…'" style="min-height:130px;font-size:16px"></textarea>
         <div class="row">
           <select v-model="draftIdeaCat" style="flex:1">
             <option>话题</option><option>话术</option><option>水军评论</option><option>其他</option>
@@ -272,8 +290,9 @@ textarea{resize:vertical;min-height:70px}
   <div class="mobile" v-else>
     <div class="mhead">
       <b>{{roleName(role)}} 面板</b>
-      <span style="display:flex;align-items:center;gap:10px">主播正在讲：{{curSection? curSection.title : '—'}}
-        <button class="logout" @click="logout">⏻ 退出</button></span>
+      <span style="display:flex;align-items:center;gap:8px">主播正在讲：{{curSection? curSection.title : '—'}}
+        <button class="logout" @click="backHome">⇄ 场次</button>
+        <button class="logout" @click="logout">⏻</button></span>
     </div>
     <div class="tabs">
       <button v-for="t in myTabs" :key="t.k" :class="{on:tab===t.k}" @click="switchTab(t.k)">{{t.n}}<span class="nbadge" v-if="badgeFor(t.k)">{{badgeFor(t.k)>99?'99+':badgeFor(t.k)}}</span></button>
@@ -282,12 +301,6 @@ textarea{resize:vertical;min-height:70px}
     <!-- 讲稿编排(老板) -->
     <template v-if="tab==='script'">
       <div class="mbody">
-        <div class="card" style="display:flex;flex-direction:column;gap:8px">
-          <select v-model="activeShowId" @change="switchShow">
-            <option v-for="sh in shows" :key="sh.id" :value="sh.id">🎬 {{sh.title||('场次'+sh.id)}}</option>
-          </select>
-          <button class="btn-gold" style="padding:10px" @click="newShow">＋ 新建场次（新直播策划）</button>
-        </div>
         <div class="card sec-edit" v-for="(s,i) in sortedSections" :key="s.id">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span class="badge" :class="{cur:s.id===curId}">第{{i+1}}段 {{s.id===curId?'· 主播正在讲':''}}</span>
@@ -391,13 +404,14 @@ textarea{resize:vertical;min-height:70px}
             <button @pointerdown.stop @click.stop="zoomBy(0.8)">－</button>
             <button @pointerdown.stop @click.stop="cvReset">⊙</button>
           </div>
-          <button class="cfab" v-if="canJudge" @pointerdown.stop @click.stop="exportShow">🎬 导出成场次</button>
+          <button class="cfab" v-if="canJudge" @pointerdown.stop @click.stop="exportShow">📝 导出成讲稿</button>
           <div class="cbanner" v-if="linkMode">{{linkMode.type==='parent'?'🔗 点一张卡作为它的上级':linkMode.type==='next'?'⬇️ 点它的「下一个」卡片':'⬆️ 点它的「上一个」卡片'}}（点空白取消）</div>
           <div class="cbanner" v-else-if="!ideas.length" style="border-color:var(--acc);color:var(--acc)">👆 点击空白处，加第一个话题</div>
         </div>
       </div>
       <div class="sendbox" v-if="ideaFormOpen">
-        <textarea v-model="draftIdea" :placeholder="draftIdeaCat==='话题'?'新话题…（会成为讲稿的一个段落标题）':'内容…'" style="min-height:56px"></textarea>
+        <div v-if="childParent" style="font-size:13px;color:var(--gold)">🔗 挂到「{{childParent.content.slice(0,14)}}」下：</div>
+        <textarea v-model="draftIdea" :placeholder="draftIdeaCat==='话题'?'新话题…（会成为讲稿的一个段落标题）':draftIdeaCat==='话术'?'话术内容…（讲稿里的一页提示文案，可写长）':'水军评论内容…'" style="min-height:130px;font-size:16px"></textarea>
         <div class="row">
           <select v-model="draftIdeaCat" style="flex:1">
             <option>话题</option><option>话术</option><option>水军评论</option><option>其他</option>
@@ -467,7 +481,7 @@ const {createApp}=Vue;
 createApp({
   data(){return{
     role:localStorage.getItem('lb_role')||'',pass:'',loginErr:'',
-    sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:null,
+    sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:+(localStorage.getItem('lb_show'))||null,newShowName:'',childParent:null,
     tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
     editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],draftIdea:'',draftIdeaCat:'话题',ideasOpen:false,cv:{tx:40,ty:30,s:1},selIdea:null,linkMode:null,childMenu:false,pendXY:null,ideaFormOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
@@ -482,6 +496,7 @@ createApp({
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
     canJudge(){return ['host','boss','manager'].includes(this.role)},
+    curShowTitle(){const sh=this.shows.find(x=>x.id===this.activeShowId);return sh?(sh.title||('场次'+sh.id)):'…'},
     placedIdeas(){
       let auto=0;
       return this.ideas.map(d=>{
@@ -587,14 +602,7 @@ createApp({
       }
     },
     setLinkMode(type,d){this.linkMode={type,from:d.id};this.selIdea=null;this.childMenu=false},
-    async addChild(p,cat){
-      this.childMenu=false;
-      const t=prompt(cat==='话术'?'话术内容（讲稿里的提示文案）：':'水军评论内容：');if(!t||!t.trim())return;
-      const nick=this.myNick();
-      const sibs=this.ideas.filter(x=>x.parent_id===p.id).length;
-      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t.trim(),category:cat,nickname:nick,created_by:this.role,parent_id:p.id,x:(p.x!=null?p.x:p._x)+240,y:(p.y!=null?p.y:p._y)+sibs*110})});
-      this.say('已挂到「'+p.content.slice(0,8)+'…」下');this.refresh(true);
-    },
+    addChild(p,cat){this.childMenu=false;this.selIdea=null;this.childParent=p;this.draftIdeaCat=cat;this.ideaFormOpen=true},
     chainSort(arr){ // next_id 串起来:先找链头,再顺链走,没入链的按位置补后面
       const inNext=new Set(arr.filter(d=>d.next_id).map(d=>d.next_id));
       const heads=arr.filter(d=>!inNext.has(d.id)).sort((a,b)=>(a._y||0)-(b._y||0)||(a._x||0)-(b._x||0));
@@ -605,25 +613,24 @@ createApp({
       return out;
     },
     async exportShow(){
-      const topics=this.chainSort(this.placedIdeas.filter(d=>['话题','话题梗','直播环节'].includes(d.category)&&d.status!=='rejected'));
-      if(!topics.length){this.say('画布上还没有话题卡');return}
-      const name=prompt('导出为新场次，起个名字：',new Date().toISOString().slice(5,10)+'·创意场');if(!name)return;
-      const show=(await api('lb_shows',{method:'POST',body:JSON.stringify({title:name.trim()})}))[0];
-      let pos=0, nTask=0;
+      const topics=this.chainSort(this.placedIdeas.filter(d=>['话题','话题梗','直播环节'].includes(d.category)&&d.status!=='rejected'&&!d.used_in));
+      if(!topics.length){this.say('没有待导出的话题卡（已导出的会跳过）');return}
+      if(!confirm(`把 ${topics.length} 个话题（含话术/水军评论）导入本场讲稿？`))return;
+      let pos=this.sections.length?Math.max(...this.sections.map(x=>x.pos)):0, nTask=0;
       for(const tp of topics){
         pos++;
         const scripts=this.chainSort(this.ideas.filter(d=>d.parent_id===tp.id&&['话术','水军话术'].includes(d.category)&&d.status!=='rejected'));
         const content=scripts.length?scripts.map(x=>x.content).join('\n---\n'):tp.content;
-        const sec=(await api('lb_sections',{method:'POST',body:JSON.stringify({pos,title:tp.content.slice(0,14),content,show_id:show.id})}))[0];
+        const sec=(await api('lb_sections',{method:'POST',body:JSON.stringify({pos,title:tp.content.slice(0,14),content,show_id:this.activeShowId})}))[0];
         const holder=[tp.id,...scripts.map(x=>x.id)];
         const comments=this.ideas.filter(d=>d.category==='水军评论'&&holder.includes(d.parent_id)&&d.status!=='rejected');
         for(const c of comments){
-          await api('lb_tasks',{method:'POST',body:JSON.stringify({content:c.content,note:'创意画布·'+(c.nickname||this.roleName(c.created_by)),section_id:sec.id,created_by:this.role,show_id:show.id})});nTask++;
+          await api('lb_tasks',{method:'POST',body:JSON.stringify({content:c.content,note:'创意画布·'+(c.nickname||this.roleName(c.created_by)),section_id:sec.id,created_by:this.role,show_id:this.activeShowId})});nTask++;
         }
-        for(const id of [tp.id,...scripts.map(x=>x.id),...comments.map(x=>x.id)])
-          await api(`lb_ideas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({used_in:'已导出→'+name.slice(0,8)})});
+        for(const id of holder.concat(comments.map(x=>x.id)))
+          await api(`lb_ideas?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({used_in:'已入讲稿'})});
       }
-      this.say(`🎬 已生成场次「${name}」：${topics.length}个段落、${nTask}条水军任务，去场次下拉切换`);this.refresh(true);
+      this.say(`📝 已导入本场讲稿：${topics.length}个段落、${nTask}条水军任务`);this.refresh(true);
     },
     cvWheel(e){
       const r=e.currentTarget.getBoundingClientRect();
@@ -643,9 +650,15 @@ createApp({
     async addIdea(){
       const t=this.draftIdea.trim();if(!t)return;
       const nick=this.myNick();
-      const px=this.pendXY?this.pendXY.x:(160-this.cv.tx)/this.cv.s+Math.random()*120, py=this.pendXY?this.pendXY.y:(140-this.cv.ty)/this.cv.s+Math.random()*120;this.pendXY=null;
-      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t,category:this.draftIdeaCat,nickname:nick,created_by:this.role,x:px,y:py})});
-      this.draftIdea='';this.ideaFormOpen=false;this.say('已投进大厅 💡');this.refresh(true);
+      let px,py,parent=null;
+      const cp=this.childParent;
+      if(cp){const sibs=this.ideas.filter(x=>x.parent_id===cp.id).length;
+        px=(cp.x!=null?cp.x:cp._x)+240;py=(cp.y!=null?cp.y:cp._y)+sibs*110;parent=cp.id}
+      else if(this.pendXY){px=this.pendXY.x;py=this.pendXY.y}
+      else{px=(160-this.cv.tx)/this.cv.s+Math.random()*120;py=(140-this.cv.ty)/this.cv.s+Math.random()*120}
+      this.pendXY=null;this.childParent=null;
+      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t,category:this.draftIdeaCat,nickname:nick,created_by:this.role,x:px,y:py,parent_id:parent,show_id:this.activeShowId})});
+      this.draftIdea='';this.ideaFormOpen=false;this.say(parent?'已挂上 🔗':'已放到画布 💡');this.refresh(true);
     },
     async toggleVote(d){
       const me=this.deviceId();
@@ -669,14 +682,13 @@ createApp({
       await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({used_in:'已转入当前场话术'})});
       d.used_in='已转入当前场话术';this.say('已转成当前场次的水军话术');this.refresh(true);
     },
-    async switchShow(){
-      await api('lb_meta?id=eq.1',{method:'PATCH',body:JSON.stringify({active_show_id:this.activeShowId,updated_at:new Date().toISOString()})});
-      this._lastCur=undefined;this.say('已切换场次，全员同步');this.refresh(true);
-    },
-    async newShow(){
-      const t=prompt('新场次名称（比如：8月26日·台球专场）');if(!t||!t.trim())return;
-      const r=await api('lb_shows',{method:'POST',body:JSON.stringify({title:t.trim()})});
-      this.activeShowId=r[0].id;await this.switchShow();
+    enterShow(sh){this.activeShowId=sh.id;localStorage.setItem('lb_show',sh.id);this._lastCur=undefined;
+      this.selIdea=null;this.linkMode=null;this.ideaFormOpen=false;this.refresh(true)},
+    backHome(){this.activeShowId=null;localStorage.removeItem('lb_show');this.selIdea=null;this.linkMode=null;this.ideaFormOpen=false;this.editing=false},
+    async createShow(){
+      const t=this.newShowName.trim();if(!t)return;
+      const r=await api('lb_shows',{method:'POST',body:JSON.stringify({title:t})});
+      this.newShowName='';this.enterShow(r[0]);
     },
     roleName(r){return NAMES[r]||r},
     fmtT(t){if(!t)return'';const d=new Date(t);return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`},
@@ -706,7 +718,7 @@ createApp({
           api(`lb_events?select=*&show_id=eq.${sid}&order=id.desc&limit=10`),
           api('lb_meta?id=eq.1&select=*'),
           api('lb_shows?select=*&order=id.desc'),
-          api('lb_ideas?select=*&order=id.desc&limit=60'),
+          api(`lb_ideas?select=*&show_id=eq.${sid}&order=id.desc&limit=100`),
           api('lb_idea_votes?select=*'),
         ]);
         this.shows=shows;
@@ -715,8 +727,7 @@ createApp({
           if(local&&inc){inc.x=local.x;inc.y=local.y}}
         this.ideas=ideas;this.ideaVotes=ivotes;
         if(this.selIdea){this.selIdea=this.ideas.find(x=>x.id===this.selIdea.id)||null}
-        const active=(meta[0]&&meta[0].active_show_id)||(shows[0]&&shows[0].id)||null;
-        if(active!==this.activeShowId){this.activeShowId=active;this._lastCur=undefined;return this.refresh(true)}
+        if(this.activeShowId&&shows.length&&!shows.find(x=>x.id===this.activeShowId)){this.activeShowId=null;localStorage.removeItem('lb_show')}
         // 编辑中不覆盖正在输入的内容(老板端)
         const editingScript=((this.role==='boss'||this.role==='manager')&&this.tab==='script')||(this.role==='host'&&this.editing);
         if(!(editingScript&&!first)) this.sections=secs;
