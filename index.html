@@ -91,6 +91,22 @@ textarea{resize:vertical;min-height:70px}
 .pagedots span.on{background:var(--gold);border-color:var(--gold)}
 .logout{padding:7px 12px;font-size:13px;color:var(--dim);border:1px solid var(--line);white-space:nowrap}
 .logout:active{color:var(--red);border-color:var(--red)}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;touch-action:none;background:
+  radial-gradient(circle,#1e2532 1px,transparent 1px) 0 0/28px 28px, var(--bg);border-radius:12px;border:1px solid var(--line);min-height:55vh}
+.cstage{position:absolute;left:0;top:0;transform-origin:0 0}
+.cnode{position:absolute;width:200px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--dim);border-radius:12px;padding:8px 10px;cursor:grab;user-select:none;box-shadow:0 3px 10px #0006}
+.cnode.sel{outline:2px solid var(--acc)}
+.cnode.dim{opacity:.4}
+.cnode.linkme{outline:2px dashed var(--gold)}
+.cnode .chead{display:flex;font-size:11px;color:var(--dim);margin-bottom:4px}
+.cnode .ctext{font-size:13px;line-height:1.45;max-height:57px;overflow:hidden}
+.cnode .cby{font-size:10px;color:var(--dim);margin-top:4px}
+.c-env{border-left-color:var(--gold)} .c-topic{border-left-color:var(--acc)} .c-script{border-left-color:var(--green)} .c-fun{border-left-color:#c77dff} .c-misc{border-left-color:var(--dim)}
+.ctools{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.ctools button{width:38px;height:38px;font-size:18px;border:1px solid var(--line)}
+.cfab{position:absolute;left:10px;bottom:10px;padding:12px 18px;font-size:15px;background:var(--acc);color:#fff;box-shadow:0 4px 14px #0008}
+.cbanner{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#31240acc;color:var(--gold);border:1px solid var(--gold);padding:8px 14px;border-radius:20px;font-size:13px;white-space:nowrap}
+.cdetail{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;width:min(560px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;z-index:70;box-shadow:0 -4px 24px #000a}
 .ideas-overlay{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;max-width:760px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 22px;border-radius:24px;font-size:15px;z-index:99;backdrop-filter:blur(6px)}
 @media(max-width:900px){.host{grid-template-columns:1fr}.col{display:none}.side{display:none}.stage h2{font-size:26px}.stage .body{font-size:20px}}
@@ -155,38 +171,56 @@ textarea{resize:vertical;min-height:70px}
       <div class="ideas-overlay" v-if="ideasOpen">
         <div class="mhead"><b>💡 创意大厅</b><button class="logout" @click="ideasOpen=false;markSeenIdeas()">✕ 关闭</button></div>
         <div class="mbody">
-        <div style="display:flex;gap:8px">
-          <button :class="ideaSort==='hot'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='hot'">🔥 最热</button>
-          <button :class="ideaSort==='new'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='new'">🕐 最新</button>
-        </div>
-        <div v-if="!ideas.length" style="color:var(--dim);text-align:center;padding:40px 0">大厅还空着，投第一个点子！</div>
-        <div class="card" v-for="d in orderedIdeas" :key="d.id" :class="{'task-sent':d.status==='rejected'}">
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-            <span class="badge">{{d.category}}</span>
-            <span class="badge cur" v-if="d.status==='adopted'">⭐ 已采用</span>
-            <span class="badge" v-else-if="d.status==='rejected'">🗑️ 不采纳</span>
-            <span class="badge" v-if="d.used_in" style="color:var(--green)">{{d.used_in}}</span>
+        <div class="canvas-wrap" @pointerdown="cvDown" @pointermove="cvMove" @pointerup="cvUp" @pointercancel="cvUp" @wheel.prevent="cvWheel">
+          <div class="cstage" :style="{transform:'translate('+cv.tx+'px,'+cv.ty+'px) scale('+cv.s+')'}">
+            <svg style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible">
+              <path v-for="l in ideaLinks" :key="l.k" :d="l.d" fill="none" :stroke="l.c" stroke-width="2.5" opacity="0.6"/>
+            </svg>
+            <div v-for="d in placedIdeas" :key="d.id" class="cnode" :class="[catClass(d.category),{sel:selIdea&&selIdea.id===d.id,dim:d.status==='rejected',linkme:linkingFrom&&linkingFrom!==d.id}]"
+                 :style="{left:d._x+'px',top:d._y+'px'}" @pointerdown.stop="nodeDown($event,d)">
+              <div class="chead"><span>{{d.category}}</span><span style="margin-left:auto">{{d.status==='adopted'?'⭐':''}} 👍{{voteCount(d)}}</span></div>
+              <div class="ctext">{{d.content}}</div>
+              <div class="cby">{{d.nickname||roleName(d.created_by)}}<span v-if="d.used_in" style="color:var(--green)"> · {{d.used_in}}</span></div>
+            </div>
           </div>
-          <div style="font-size:15px;line-height:1.6">{{d.content}}</div>
-          <div style="font-size:12px;color:var(--dim);margin-top:6px">{{d.nickname||roleName(d.created_by)}}（{{roleName(d.created_by)}}）· {{fmtT(d.created_at)}}</div>
-          <div class="row">
-            <button :class="myVoted(d)?'btn-acc':''" @click="toggleVote(d)">👍 {{voteCount(d)}}</button>
-            <template v-if="canJudge">
-              <button v-if="d.status==='open'" class="btn-gold" @click="judgeIdea(d,'adopted')">⭐ 采用</button>
-              <button v-if="d.status==='open'" @click="judgeIdea(d,'rejected')">🗑️ 不采纳</button>
-              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToSection(d)">→ 转讲稿段</button>
-              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToTask(d)">→ 转话术</button>
-            </template>
+          <div class="ctools">
+            <button @pointerdown.stop @click.stop="zoomBy(1.25)">＋</button>
+            <button @pointerdown.stop @click.stop="zoomBy(0.8)">－</button>
+            <button @pointerdown.stop @click.stop="cvReset">⊙</button>
           </div>
+          <button class="cfab" @pointerdown.stop @click.stop="ideaFormOpen=!ideaFormOpen">💡 投点子</button>
+          <div class="cbanner" v-if="linkingFrom">🔗 现在点一张卡片作为它的<b>上级</b>（环节→话题→话术）</div>
         </div>
         </div>
-      <div class="sendbox">
-        <textarea v-model="draftIdea" placeholder="你的点子…（话题梗 / 直播环节 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
+      <div class="sendbox" v-if="ideaFormOpen">
+        <textarea v-model="draftIdea" placeholder="你的点子…（直播环节 / 话题梗 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
         <div class="row">
           <select v-model="draftIdeaCat" style="flex:1">
-            <option>话题梗</option><option>直播环节</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
+            <option>直播环节</option><option>话题梗</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
           </select>
           <button class="btn-acc" @click="addIdea">💡 投进大厅</button>
+        </div>
+      </div>
+      <div class="cdetail" v-if="selIdea">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <span class="badge">{{selIdea.category}}</span>
+          <span class="badge cur" v-if="selIdea.status==='adopted'">⭐ 已采用</span>
+          <span class="badge" v-else-if="selIdea.status==='rejected'">🗑️ 不采纳</span>
+          <span class="badge" v-if="selIdea.used_in" style="color:var(--green)">{{selIdea.used_in}}</span>
+          <button class="logout" style="margin-left:auto" @click="selIdea=null">✕</button>
+        </div>
+        <div style="font-size:15px;line-height:1.6;max-height:26vh;overflow-y:auto">{{selIdea.content}}</div>
+        <div style="font-size:12px;color:var(--dim);margin:6px 0">{{selIdea.nickname||roleName(selIdea.created_by)}}（{{roleName(selIdea.created_by)}}）· {{fmtT(selIdea.created_at)}}</div>
+        <div class="row" style="flex-wrap:wrap">
+          <button :class="myVoted(selIdea)?'btn-acc':''" @click="toggleVote(selIdea)">👍 {{voteCount(selIdea)}}</button>
+          <button v-if="!selIdea.parent_id" class="btn-acc" @click="startLink(selIdea)">🔗 连上级</button>
+          <button v-else @click="unlink(selIdea)">✂️ 断开连线</button>
+          <template v-if="canJudge">
+            <button v-if="selIdea.status==='open'" class="btn-gold" @click="judgeIdea(selIdea,'adopted')">⭐ 采用</button>
+            <button v-if="selIdea.status==='open'" @click="judgeIdea(selIdea,'rejected')">🗑️</button>
+            <button v-if="selIdea.status==='adopted'&&!selIdea.used_in" class="btn-green" @click="ideaToSection(selIdea)">→讲稿</button>
+            <button v-if="selIdea.status==='adopted'&&!selIdea.used_in" class="btn-green" @click="ideaToTask(selIdea)">→话术</button>
+          </template>
         </div>
       </div>
       </div>
@@ -305,38 +339,56 @@ textarea{resize:vertical;min-height:70px}
     <!-- 创意大厅 -->
     <template v-if="tab==='ideas'">
       <div class="mbody">
-        <div style="display:flex;gap:8px">
-          <button :class="ideaSort==='hot'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='hot'">🔥 最热</button>
-          <button :class="ideaSort==='new'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='new'">🕐 最新</button>
-        </div>
-        <div v-if="!ideas.length" style="color:var(--dim);text-align:center;padding:40px 0">大厅还空着，投第一个点子！</div>
-        <div class="card" v-for="d in orderedIdeas" :key="d.id" :class="{'task-sent':d.status==='rejected'}">
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-            <span class="badge">{{d.category}}</span>
-            <span class="badge cur" v-if="d.status==='adopted'">⭐ 已采用</span>
-            <span class="badge" v-else-if="d.status==='rejected'">🗑️ 不采纳</span>
-            <span class="badge" v-if="d.used_in" style="color:var(--green)">{{d.used_in}}</span>
+        <div class="canvas-wrap" @pointerdown="cvDown" @pointermove="cvMove" @pointerup="cvUp" @pointercancel="cvUp" @wheel.prevent="cvWheel">
+          <div class="cstage" :style="{transform:'translate('+cv.tx+'px,'+cv.ty+'px) scale('+cv.s+')'}">
+            <svg style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible">
+              <path v-for="l in ideaLinks" :key="l.k" :d="l.d" fill="none" :stroke="l.c" stroke-width="2.5" opacity="0.6"/>
+            </svg>
+            <div v-for="d in placedIdeas" :key="d.id" class="cnode" :class="[catClass(d.category),{sel:selIdea&&selIdea.id===d.id,dim:d.status==='rejected',linkme:linkingFrom&&linkingFrom!==d.id}]"
+                 :style="{left:d._x+'px',top:d._y+'px'}" @pointerdown.stop="nodeDown($event,d)">
+              <div class="chead"><span>{{d.category}}</span><span style="margin-left:auto">{{d.status==='adopted'?'⭐':''}} 👍{{voteCount(d)}}</span></div>
+              <div class="ctext">{{d.content}}</div>
+              <div class="cby">{{d.nickname||roleName(d.created_by)}}<span v-if="d.used_in" style="color:var(--green)"> · {{d.used_in}}</span></div>
+            </div>
           </div>
-          <div style="font-size:15px;line-height:1.6">{{d.content}}</div>
-          <div style="font-size:12px;color:var(--dim);margin-top:6px">{{d.nickname||roleName(d.created_by)}}（{{roleName(d.created_by)}}）· {{fmtT(d.created_at)}}</div>
-          <div class="row">
-            <button :class="myVoted(d)?'btn-acc':''" @click="toggleVote(d)">👍 {{voteCount(d)}}</button>
-            <template v-if="canJudge">
-              <button v-if="d.status==='open'" class="btn-gold" @click="judgeIdea(d,'adopted')">⭐ 采用</button>
-              <button v-if="d.status==='open'" @click="judgeIdea(d,'rejected')">🗑️ 不采纳</button>
-              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToSection(d)">→ 转讲稿段</button>
-              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToTask(d)">→ 转话术</button>
-            </template>
+          <div class="ctools">
+            <button @pointerdown.stop @click.stop="zoomBy(1.25)">＋</button>
+            <button @pointerdown.stop @click.stop="zoomBy(0.8)">－</button>
+            <button @pointerdown.stop @click.stop="cvReset">⊙</button>
           </div>
+          <button class="cfab" @pointerdown.stop @click.stop="ideaFormOpen=!ideaFormOpen">💡 投点子</button>
+          <div class="cbanner" v-if="linkingFrom">🔗 现在点一张卡片作为它的<b>上级</b>（环节→话题→话术）</div>
         </div>
       </div>
-      <div class="sendbox">
-        <textarea v-model="draftIdea" placeholder="你的点子…（话题梗 / 直播环节 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
+      <div class="sendbox" v-if="ideaFormOpen">
+        <textarea v-model="draftIdea" placeholder="你的点子…（直播环节 / 话题梗 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
         <div class="row">
           <select v-model="draftIdeaCat" style="flex:1">
-            <option>话题梗</option><option>直播环节</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
+            <option>直播环节</option><option>话题梗</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
           </select>
           <button class="btn-acc" @click="addIdea">💡 投进大厅</button>
+        </div>
+      </div>
+      <div class="cdetail" v-if="selIdea">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <span class="badge">{{selIdea.category}}</span>
+          <span class="badge cur" v-if="selIdea.status==='adopted'">⭐ 已采用</span>
+          <span class="badge" v-else-if="selIdea.status==='rejected'">🗑️ 不采纳</span>
+          <span class="badge" v-if="selIdea.used_in" style="color:var(--green)">{{selIdea.used_in}}</span>
+          <button class="logout" style="margin-left:auto" @click="selIdea=null">✕</button>
+        </div>
+        <div style="font-size:15px;line-height:1.6;max-height:26vh;overflow-y:auto">{{selIdea.content}}</div>
+        <div style="font-size:12px;color:var(--dim);margin:6px 0">{{selIdea.nickname||roleName(selIdea.created_by)}}（{{roleName(selIdea.created_by)}}）· {{fmtT(selIdea.created_at)}}</div>
+        <div class="row" style="flex-wrap:wrap">
+          <button :class="myVoted(selIdea)?'btn-acc':''" @click="toggleVote(selIdea)">👍 {{voteCount(selIdea)}}</button>
+          <button v-if="!selIdea.parent_id" class="btn-acc" @click="startLink(selIdea)">🔗 连上级</button>
+          <button v-else @click="unlink(selIdea)">✂️ 断开连线</button>
+          <template v-if="canJudge">
+            <button v-if="selIdea.status==='open'" class="btn-gold" @click="judgeIdea(selIdea,'adopted')">⭐ 采用</button>
+            <button v-if="selIdea.status==='open'" @click="judgeIdea(selIdea,'rejected')">🗑️</button>
+            <button v-if="selIdea.status==='adopted'&&!selIdea.used_in" class="btn-green" @click="ideaToSection(selIdea)">→讲稿</button>
+            <button v-if="selIdea.status==='adopted'&&!selIdea.used_in" class="btn-green" @click="ideaToTask(selIdea)">→话术</button>
+          </template>
         </div>
       </div>
     </template>
@@ -380,7 +432,7 @@ createApp({
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:null,
     tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
-    editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],ideaSort:'hot',draftIdea:'',draftIdeaCat:'话题梗',ideasOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
+    editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],draftIdea:'',draftIdeaCat:'直播环节',ideasOpen:false,cv:{tx:40,ty:30,s:1},selIdea:null,linkingFrom:null,ideaFormOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
   }},
   computed:{
     sortedSections(){return [...this.sections].sort((a,b)=>a.pos-b.pos)},
@@ -392,11 +444,22 @@ createApp({
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
     canJudge(){return ['host','boss','manager'].includes(this.role)},
-    orderedIdeas(){
-      const arr=[...this.ideas];
-      if(this.ideaSort==='hot')arr.sort((a,b)=>this.voteCount(b)-this.voteCount(a)||b.id-a.id);
-      else arr.sort((a,b)=>b.id-a.id);
-      return arr;
+    placedIdeas(){
+      let auto=0;
+      return this.ideas.map(d=>{
+        if(d.x!=null&&d.y!=null){d._x=d.x;d._y=d.y}
+        else{d._x=40+(auto%3)*230;d._y=40+Math.floor(auto/3)*150;auto++}
+        return d;
+      });
+    },
+    ideaLinks(){
+      const map={};this.placedIdeas.forEach(d=>map[d.id]=d);
+      const cc={'直播环节':'#ffb84d','话题梗':'#4da3ff','水军话术':'#3ddc84','福利玩法':'#c77dff'};
+      return this.placedIdeas.filter(d=>d.parent_id&&map[d.parent_id]).map(d=>{
+        const p=map[d.parent_id];
+        const x1=d._x+100,y1=d._y+45,x2=p._x+100,y2=p._y+45,my=(y1+y2)/2;
+        return {k:d.id+'-'+p.id, d:`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`, c:cc[p.category]||'#8b96ab'};
+      });
     },
     orderedTasks(){
       const rank=t=> t.status!=='pending' ? 3 : (t.section_id===this.curId ? 0 : (t.section_id?1:2));
@@ -441,6 +504,41 @@ createApp({
         }
       }
     },
+    catClass(c){return {'直播环节':'c-env','话题梗':'c-topic','水军话术':'c-script','福利玩法':'c-fun'}[c]||'c-misc'},
+    cvDown(e){e.currentTarget.setPointerCapture&&e.currentTarget.setPointerCapture(e.pointerId);
+      this._drag={type:'pan',sx:e.clientX,sy:e.clientY,tx:this.cv.tx,ty:this.cv.ty,moved:false}},
+    nodeDown(e,d){e.target.setPointerCapture&&e.target.setPointerCapture(e.pointerId);
+      this._drag={type:'node',d,sx:e.clientX,sy:e.clientY,ox:d._x,oy:d._y,moved:false}},
+    cvMove(e){
+      const g=this._drag;if(!g)return;
+      const dx=e.clientX-g.sx,dy=e.clientY-g.sy;
+      if(Math.abs(dx)+Math.abs(dy)>4)g.moved=true;
+      if(g.type==='pan'){this.cv.tx=g.tx+dx;this.cv.ty=g.ty+dy}
+      else{g.d.x=g.ox+dx/this.cv.s;g.d.y=g.oy+dy/this.cv.s;g.d._x=g.d.x;g.d._y=g.d.y}
+    },
+    async cvUp(e){
+      const g=this._drag;this._drag=null;if(!g)return;
+      if(g.type==='node'){
+        if(g.moved){await api(`lb_ideas?id=eq.${g.d.id}`,{method:'PATCH',body:JSON.stringify({x:g.d.x,y:g.d.y})})}
+        else{ // 点击
+          if(this.linkingFrom&&this.linkingFrom!==g.d.id){
+            await api(`lb_ideas?id=eq.${this.linkingFrom}`,{method:'PATCH',body:JSON.stringify({parent_id:g.d.id})});
+            const child=this.ideas.find(x=>x.id===this.linkingFrom);if(child)child.parent_id=g.d.id;
+            this.linkingFrom=null;this.say('🔗 已连线');
+          }else{this.selIdea=g.d;this.ideaFormOpen=false}
+        }
+      }else if(!g.moved){this.selIdea=null;this.linkingFrom=null}
+    },
+    cvWheel(e){
+      const r=e.currentTarget.getBoundingClientRect();
+      const mx=e.clientX-r.left,my=e.clientY-r.top;
+      const ns=Math.min(2.5,Math.max(0.25,this.cv.s*(e.deltaY<0?1.12:0.9)));
+      this.cv.tx=mx-(mx-this.cv.tx)*ns/this.cv.s;this.cv.ty=my-(my-this.cv.ty)*ns/this.cv.s;this.cv.s=ns;
+    },
+    zoomBy(f){const ns=Math.min(2.5,Math.max(0.25,this.cv.s*f));this.cv.s=ns},
+    cvReset(){this.cv={tx:40,ty:30,s:1}},
+    startLink(d){this.linkingFrom=d.id;this.selIdea=null},
+    async unlink(d){await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({parent_id:null})});d.parent_id=null;this.say('已断开')},
     deviceId(){let d=localStorage.getItem('lb_device');if(!d){d=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('lb_device',d)}return d},
     myNick(){let n=localStorage.getItem('lb_nick');if(!n){n=(prompt('第一次投创意，起个昵称（比如：小张）')||'').trim();if(n)localStorage.setItem('lb_nick',n)}return n||this.roleName(this.role)},
     markSeenIdeas(){if(this.ideas.length){this.seenIdea=Math.max(this.seenIdea,...this.ideas.map(d=>d.id));localStorage.setItem('lb_seen_idea',this.seenIdea)}},
@@ -449,8 +547,9 @@ createApp({
     async addIdea(){
       const t=this.draftIdea.trim();if(!t)return;
       const nick=this.myNick();
-      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t,category:this.draftIdeaCat,nickname:nick,created_by:this.role})});
-      this.draftIdea='';this.say('已投进大厅 💡');this.refresh(true);
+      const px=(160-this.cv.tx)/this.cv.s+Math.random()*120, py=(140-this.cv.ty)/this.cv.s+Math.random()*120;
+      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t,category:this.draftIdeaCat,nickname:nick,created_by:this.role,x:px,y:py})});
+      this.draftIdea='';this.ideaFormOpen=false;this.say('已投进大厅 💡');this.refresh(true);
     },
     async toggleVote(d){
       const me=this.deviceId();
@@ -514,7 +613,12 @@ createApp({
           api('lb_ideas?select=*&order=id.desc&limit=60'),
           api('lb_idea_votes?select=*'),
         ]);
-        this.shows=shows;this.ideas=ideas;this.ideaVotes=ivotes;
+        this.shows=shows;
+        const dragId=this._drag&&this._drag.type==='node'?this._drag.d.id:null;
+        if(dragId){const local=this.ideas.find(x=>x.id===dragId);const inc=ideas.find(x=>x.id===dragId);
+          if(local&&inc){inc.x=local.x;inc.y=local.y}}
+        this.ideas=ideas;this.ideaVotes=ivotes;
+        if(this.selIdea){this.selIdea=this.ideas.find(x=>x.id===this.selIdea.id)||null}
         const active=(meta[0]&&meta[0].active_show_id)||(shows[0]&&shows[0].id)||null;
         if(active!==this.activeShowId){this.activeShowId=active;this._lastCur=undefined;return this.refresh(true)}
         // 编辑中不覆盖正在输入的内容(老板端)
