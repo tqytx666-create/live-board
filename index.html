@@ -250,8 +250,7 @@ createApp({
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
     myTabs(){
-      if(this.role==='boss')return[{k:'script',n:'📝 讲稿'},{k:'tasks',n:'📣 话术'},{k:'msg',n:'💬 消息'}];
-      if(this.role==='manager')return[{k:'tasks',n:'📣 话术'},{k:'msg',n:'💬 消息'}];
+      if(this.role==='boss'||this.role==='manager')return[{k:'script',n:'📝 讲稿'},{k:'tasks',n:'📣 话术'},{k:'msg',n:'💬 消息'}];
       return[{k:'mytasks',n:'📋 任务'},{k:'msg',n:'💬 消息'}];
     },
   },
@@ -298,7 +297,7 @@ createApp({
           api('lb_meta?id=eq.1&select=*'),
         ]);
         // 编辑中不覆盖正在输入的内容(老板端)
-        if(!(this.role==='boss'&&this.tab==='script'&&!first)) this.sections=secs;
+        if(!((this.role==='boss'||this.role==='manager')&&this.tab==='script'&&!first)) this.sections=secs;
         this.tasks=tasks;this.events=evs;this.meta=meta[0]||this.meta;
         if(this.messages.length&&msgs.length&&msgs[0].id!==this.lastMsgId&&!first){
           const fresh=msgs.filter(m=>m.id>this.lastMsgId&&m.role!==this.role);
