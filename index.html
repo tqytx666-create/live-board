@@ -75,6 +75,8 @@ textarea{resize:vertical;min-height:70px}
 .sendbox{padding:10px;border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:8px}
 .sendbox .row{display:flex;gap:8px}
 .sendbox .row button{padding:11px 18px;font-size:15px;white-space:nowrap}
+.logout{padding:7px 12px;font-size:13px;color:var(--dim);border:1px solid var(--line);white-space:nowrap}
+.logout:active{color:var(--red);border-color:var(--red)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 22px;border-radius:24px;font-size:15px;z-index:99;backdrop-filter:blur(6px)}
 @media(max-width:900px){.host{grid-template-columns:1fr}.col{display:none}.side{display:none}.stage h2{font-size:26px}.stage .body{font-size:20px}}
 </style>
@@ -110,6 +112,7 @@ textarea{resize:vertical;min-height:70px}
         <button @click="nav(-1)">← 上一段</button>
         <button class="next" @click="nav(1)">下一段 →（空格键）</button>
         <span class="hint">键盘 ←→ / 空格 翻页</span>
+        <button class="logout" @click="logout">⏻ 退出</button>
       </div>
     </div>
     <div class="side">
@@ -137,7 +140,8 @@ textarea{resize:vertical;min-height:70px}
   <div class="mobile" v-else>
     <div class="mhead">
       <b>{{roleName(role)}} 面板</b>
-      <span>主播正在讲：{{curSection? curSection.title : '—'}}</span>
+      <span style="display:flex;align-items:center;gap:10px">主播正在讲：{{curSection? curSection.title : '—'}}
+        <button class="logout" @click="logout">⏻ 退出</button></span>
     </div>
     <div class="tabs">
       <button v-for="t in myTabs" :key="t.k" :class="{on:tab===t.k}" @click="switchTab(t.k)">{{t.n}}<span class="nbadge" v-if="badgeFor(t.k)">{{badgeFor(t.k)>99?'99+':badgeFor(t.k)}}</span></button>
@@ -261,6 +265,10 @@ createApp({
     markSeen(){
       if(this.tab==='msg'&&this.messages.length){this.seenMsg=Math.max(this.seenMsg,...this.messages.map(m=>m.id));localStorage.setItem('lb_seen_msg',this.seenMsg)}
       if(this.tab==='mytasks'&&this.tasks.length){this.seenTask=Math.max(this.seenTask,...this.tasks.map(t=>t.id));localStorage.setItem('lb_seen_task',this.seenTask)}
+    },
+    logout(){
+      clearInterval(this.timer);window.removeEventListener('keydown',this.onKey);
+      localStorage.removeItem('lb_role');this.role='';this.pass='';this.loginErr='';
     },
     roleName(r){return NAMES[r]||r},
     fmtT(t){if(!t)return'';const d=new Date(t);return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`},
