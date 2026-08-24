@@ -10,7 +10,10 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;height:100vh;height:100dvh;overflow:hidden}
 button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;background:var(--panel2);color:var(--txt)}
-input,textarea{font-family:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px 12px;font-size:15px;width:100%}
+input,textarea,select{font-family:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px 12px;font-size:15px;width:100%}
+.task-hot{border-color:var(--gold)!important;box-shadow:0 0 0 1px var(--gold)}
+.hotline{font-size:13px;color:var(--gold);font-weight:700;margin-bottom:5px}
+.waitline{font-size:12px;color:var(--dim);margin-bottom:5px}
 textarea{resize:vertical;min-height:70px}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 /* ---- 登录 ---- */
@@ -188,7 +191,9 @@ textarea{resize:vertical;min-height:70px}
     <!-- 派话术(老板/经理) -->
     <template v-if="tab==='tasks'">
       <div class="mbody">
-        <div class="card" v-for="t in tasks" :key="t.id" :class="{'task-sent':t.status==='sent'}">
+        <div class="card" v-for="t in orderedTasks" :key="t.id" :class="{'task-sent':t.status==='sent','task-hot':isHot(t)}">
+          <div class="hotline" v-if="isHot(t)">🔥 主播正在讲这段 · 现在就发！</div>
+          <div class="waitline" v-else-if="t.section_id&&t.status==='pending'">📍 等主播讲到 {{secLabel(t.section_id)}} 再发</div>
           <div v-if="t.note" style="font-size:12px;color:var(--gold);margin-bottom:5px">⏰ {{t.note}}</div>
           <div style="font-size:15px;line-height:1.5">{{t.content}}</div>
           <div style="font-size:12px;color:var(--dim);margin-top:6px">
@@ -206,6 +211,10 @@ textarea{resize:vertical;min-height:70px}
       </div>
       <div class="sendbox">
         <textarea v-model="draftTask" placeholder="写一条要水军发的话术…" style="min-height:56px"></textarea>
+        <select v-model="draftSecId">
+          <option value="">🔗 不绑定阶段（随时可发）</option>
+          <option v-for="(s,i) in sortedSections" :key="s.id" :value="s.id">🔗 绑定第{{i+1}}段·{{s.title||'(未命名)'}}（主播讲到自动提醒）</option>
+        </select>
         <input v-model="draftNote" placeholder="发送时机备注(可选,水军可见但不会被复制)">
         <div class="row"><button class="btn-gold" style="flex:1" @click="addTask">派发话术任务</button></div>
       </div>
@@ -215,7 +224,9 @@ textarea{resize:vertical;min-height:70px}
     <template v-if="tab==='mytasks'">
       <div class="mbody">
         <div v-if="!tasks.length" style="color:var(--dim);text-align:center;padding:40px 0">暂无话术任务</div>
-        <div class="card" v-for="t in tasks" :key="t.id" :class="{'task-sent':t.status==='sent'}">
+        <div class="card" v-for="t in orderedTasks" :key="t.id" :class="{'task-sent':t.status==='sent','task-hot':isHot(t)}">
+          <div class="hotline" v-if="isHot(t)">🔥 主播正在讲这段 · 现在就发！</div>
+          <div class="waitline" v-else-if="t.section_id&&t.status==='pending'">📍 等主播讲到 {{secLabel(t.section_id)}} 再发</div>
           <div v-if="t.note" style="font-size:13px;color:var(--gold);margin-bottom:6px">⏰ {{t.note}}</div>
           <div style="font-size:16px;line-height:1.6">{{t.content}}</div>
           <div style="font-size:12px;color:var(--dim);margin-top:6px">{{roleName(t.created_by)}} · {{fmtT(t.created_at)}}
@@ -268,7 +279,7 @@ createApp({
   data(){return{
     role:localStorage.getItem('lb_role')||'',pass:'',loginErr:'',
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0},
-    tab:'',draftTask:'',draftNote:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
+    tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
     editing:false,editTitle:'',editContent:'',
   }},
@@ -281,6 +292,10 @@ createApp({
     curPage(){const p=this.meta.current_page||0;return Math.max(0,Math.min(p,this.pages.length-1))},
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
+    orderedTasks(){
+      const rank=t=> t.status!=='pending' ? 3 : (t.section_id===this.curId ? 0 : (t.section_id?1:2));
+      return [...this.tasks].sort((a,b)=>rank(a)-rank(b)||b.id-a.id);
+    },
     myTabs(){
       if(this.role==='boss'||this.role==='manager')return[{k:'script',n:'📝 讲稿'},{k:'tasks',n:'📣 话术'},{k:'msg',n:'💬 消息'}];
       return[{k:'mytasks',n:'📋 任务'},{k:'msg',n:'💬 消息'}];
@@ -305,6 +320,18 @@ createApp({
     logout(){
       clearInterval(this.timer);window.removeEventListener('keydown',this.onKey);
       localStorage.removeItem('lb_role');this.role='';this.pass='';this.loginErr='';
+    },
+    isHot(t){return t.status==='pending'&&t.section_id===this.curId},
+    secLabel(id){const i=this.sortedSections.findIndex(s=>s.id===id);return i<0?'(已删除的段落)':`第${i+1}段「${this.sortedSections[i].title||'未命名'}」`},
+    checkStage(){
+      if(this._lastCur===undefined){this._lastCur=this.curId;return}
+      if(this.curId!==this._lastCur){
+        this._lastCur=this.curId;
+        if((this.role==='crew'||this.role==='manager'||this.role==='boss')&&this.curSection){
+          const n=this.tasks.filter(t=>this.isHot(t)).length;
+          if(n)this.say(`🔥 主播讲到「${this.curSection.title}」，有 ${n} 条话术该发了`);
+        }
+      }
     },
     roleName(r){return NAMES[r]||r},
     fmtT(t){if(!t)return'';const d=new Date(t);return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`},
@@ -343,6 +370,7 @@ createApp({
         }
         this.messages=msgs;if(msgs.length)this.lastMsgId=msgs[0].id;
         this.markSeen();
+        this.checkStage();
         this.inited=true;
       }catch(e){console.warn('sync fail',e)}
     },
@@ -399,8 +427,8 @@ createApp({
     // ---- 话术任务 ----
     async addTask(){
       const t=this.draftTask.trim();if(!t)return;
-      await api('lb_tasks',{method:'POST',body:JSON.stringify({content:t,note:this.draftNote.trim(),created_by:this.role})});
-      this.draftTask='';this.draftNote='';this.say('已派发给水军');this.refresh(true);
+      await api('lb_tasks',{method:'POST',body:JSON.stringify({content:t,note:this.draftNote.trim(),section_id:this.draftSecId||null,created_by:this.role})});
+      this.draftTask='';this.draftNote='';this.draftSecId='';this.say('已派发给水军');this.refresh(true);
     },
     async copyTask(t){
       try{await navigator.clipboard.writeText(t.content);this.say('已复制，去直播间粘贴')}
