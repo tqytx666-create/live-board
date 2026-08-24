@@ -91,6 +91,7 @@ textarea{resize:vertical;min-height:70px}
 .pagedots span.on{background:var(--gold);border-color:var(--gold)}
 .logout{padding:7px 12px;font-size:13px;color:var(--dim);border:1px solid var(--line);white-space:nowrap}
 .logout:active{color:var(--red);border-color:var(--red)}
+.ideas-overlay{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;max-width:760px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 22px;border-radius:24px;font-size:15px;z-index:99;backdrop-filter:blur(6px)}
 @media(max-width:900px){.host{grid-template-columns:1fr}.col{display:none}.side{display:none}.stage h2{font-size:26px}.stage .body{font-size:20px}}
 </style>
@@ -148,7 +149,46 @@ textarea{resize:vertical;min-height:70px}
         <button @click="nav(-1)">← 上一页</button>
         <button class="next" @click="nav(1)">下一页 →（空格键）</button>
         <span class="hint">键盘 ←→ / 空格 翻页</span>
+        <button class="logout" @click="ideasOpen=true">💡 创意<span class="nbadge" v-if="badgeFor('ideas')" style="position:static;margin-left:4px">{{badgeFor('ideas')}}</span></button>
         <button class="logout" @click="logout">⏻ 退出</button>
+      </div>
+      <div class="ideas-overlay" v-if="ideasOpen">
+        <div class="mhead"><b>💡 创意大厅</b><button class="logout" @click="ideasOpen=false;markSeenIdeas()">✕ 关闭</button></div>
+        <div class="mbody">
+        <div style="display:flex;gap:8px">
+          <button :class="ideaSort==='hot'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='hot'">🔥 最热</button>
+          <button :class="ideaSort==='new'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='new'">🕐 最新</button>
+        </div>
+        <div v-if="!ideas.length" style="color:var(--dim);text-align:center;padding:40px 0">大厅还空着，投第一个点子！</div>
+        <div class="card" v-for="d in orderedIdeas" :key="d.id" :class="{'task-sent':d.status==='rejected'}">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <span class="badge">{{d.category}}</span>
+            <span class="badge cur" v-if="d.status==='adopted'">⭐ 已采用</span>
+            <span class="badge" v-else-if="d.status==='rejected'">🗑️ 不采纳</span>
+            <span class="badge" v-if="d.used_in" style="color:var(--green)">{{d.used_in}}</span>
+          </div>
+          <div style="font-size:15px;line-height:1.6">{{d.content}}</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:6px">{{d.nickname||roleName(d.created_by)}}（{{roleName(d.created_by)}}）· {{fmtT(d.created_at)}}</div>
+          <div class="row">
+            <button :class="myVoted(d)?'btn-acc':''" @click="toggleVote(d)">👍 {{voteCount(d)}}</button>
+            <template v-if="canJudge">
+              <button v-if="d.status==='open'" class="btn-gold" @click="judgeIdea(d,'adopted')">⭐ 采用</button>
+              <button v-if="d.status==='open'" @click="judgeIdea(d,'rejected')">🗑️ 不采纳</button>
+              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToSection(d)">→ 转讲稿段</button>
+              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToTask(d)">→ 转话术</button>
+            </template>
+          </div>
+        </div>
+        </div>
+      <div class="sendbox">
+        <textarea v-model="draftIdea" placeholder="你的点子…（话题梗 / 直播环节 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
+        <div class="row">
+          <select v-model="draftIdeaCat" style="flex:1">
+            <option>话题梗</option><option>直播环节</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
+          </select>
+          <button class="btn-acc" @click="addIdea">💡 投进大厅</button>
+        </div>
+      </div>
       </div>
     </div>
     <div class="side">
@@ -262,6 +302,45 @@ textarea{resize:vertical;min-height:70px}
       </div>
     </template>
 
+    <!-- 创意大厅 -->
+    <template v-if="tab==='ideas'">
+      <div class="mbody">
+        <div style="display:flex;gap:8px">
+          <button :class="ideaSort==='hot'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='hot'">🔥 最热</button>
+          <button :class="ideaSort==='new'?'btn-acc':''" style="flex:1;padding:9px" @click="ideaSort='new'">🕐 最新</button>
+        </div>
+        <div v-if="!ideas.length" style="color:var(--dim);text-align:center;padding:40px 0">大厅还空着，投第一个点子！</div>
+        <div class="card" v-for="d in orderedIdeas" :key="d.id" :class="{'task-sent':d.status==='rejected'}">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <span class="badge">{{d.category}}</span>
+            <span class="badge cur" v-if="d.status==='adopted'">⭐ 已采用</span>
+            <span class="badge" v-else-if="d.status==='rejected'">🗑️ 不采纳</span>
+            <span class="badge" v-if="d.used_in" style="color:var(--green)">{{d.used_in}}</span>
+          </div>
+          <div style="font-size:15px;line-height:1.6">{{d.content}}</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:6px">{{d.nickname||roleName(d.created_by)}}（{{roleName(d.created_by)}}）· {{fmtT(d.created_at)}}</div>
+          <div class="row">
+            <button :class="myVoted(d)?'btn-acc':''" @click="toggleVote(d)">👍 {{voteCount(d)}}</button>
+            <template v-if="canJudge">
+              <button v-if="d.status==='open'" class="btn-gold" @click="judgeIdea(d,'adopted')">⭐ 采用</button>
+              <button v-if="d.status==='open'" @click="judgeIdea(d,'rejected')">🗑️ 不采纳</button>
+              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToSection(d)">→ 转讲稿段</button>
+              <button v-if="d.status==='adopted'&&!d.used_in" class="btn-green" @click="ideaToTask(d)">→ 转话术</button>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="sendbox">
+        <textarea v-model="draftIdea" placeholder="你的点子…（话题梗 / 直播环节 / 话术 / 玩法都行）" style="min-height:56px"></textarea>
+        <div class="row">
+          <select v-model="draftIdeaCat" style="flex:1">
+            <option>话题梗</option><option>直播环节</option><option>水军话术</option><option>福利玩法</option><option>其他</option>
+          </select>
+          <button class="btn-acc" @click="addIdea">💡 投进大厅</button>
+        </div>
+      </div>
+    </template>
+
     <!-- 消息(所有幕后角色) -->
     <template v-if="tab==='msg'">
       <div class="mbody">
@@ -301,7 +380,7 @@ createApp({
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:null,
     tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
-    editing:false,editTitle:'',editContent:'',
+    editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],ideaSort:'hot',draftIdea:'',draftIdeaCat:'话题梗',ideasOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
   }},
   computed:{
     sortedSections(){return [...this.sections].sort((a,b)=>a.pos-b.pos)},
@@ -312,25 +391,34 @@ createApp({
     curPage(){const p=this.meta.current_page||0;return Math.max(0,Math.min(p,this.pages.length-1))},
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
+    canJudge(){return ['host','boss','manager'].includes(this.role)},
+    orderedIdeas(){
+      const arr=[...this.ideas];
+      if(this.ideaSort==='hot')arr.sort((a,b)=>this.voteCount(b)-this.voteCount(a)||b.id-a.id);
+      else arr.sort((a,b)=>b.id-a.id);
+      return arr;
+    },
     orderedTasks(){
       const rank=t=> t.status!=='pending' ? 3 : (t.section_id===this.curId ? 0 : (t.section_id?1:2));
       return [...this.tasks].sort((a,b)=>rank(a)-rank(b)||b.id-a.id);
     },
     myTabs(){
-      if(this.role==='boss'||this.role==='manager')return[{k:'script',n:'📝 讲稿'},{k:'tasks',n:'📣 话术'},{k:'msg',n:'💬 消息'}];
-      return[{k:'mytasks',n:'📋 任务'},{k:'msg',n:'💬 消息'}];
+      if(this.role==='boss'||this.role==='manager')return[{k:'script',n:'📝 讲稿'},{k:'tasks',n:'📣 话术'},{k:'ideas',n:'💡 创意'},{k:'msg',n:'💬 消息'}];
+      return[{k:'mytasks',n:'📋 任务'},{k:'ideas',n:'💡 创意'},{k:'msg',n:'💬 消息'}];
     },
   },
   methods:{
     badgeFor(k){
       if(k==='msg')return this.messages.filter(m=>m.id>this.seenMsg&&m.role!==this.role).length;
       if(k==='mytasks')return this.tasks.filter(t=>t.status==='pending'&&t.id>this.seenTask).length;
+      if(k==='ideas')return this.ideas.filter(d=>d.id>this.seenIdea).length;
       return 0;
     },
     switchTab(k){this.tab=k;this.markSeen()},
     markSeen(){
       if(this.tab==='msg'&&this.messages.length){this.seenMsg=Math.max(this.seenMsg,...this.messages.map(m=>m.id));localStorage.setItem('lb_seen_msg',this.seenMsg)}
       if(this.tab==='mytasks'&&this.tasks.length){this.seenTask=Math.max(this.seenTask,...this.tasks.map(t=>t.id));localStorage.setItem('lb_seen_task',this.seenTask)}
+      if((this.tab==='ideas'||this.ideasOpen)&&this.ideas.length)this.markSeenIdeas();
     },
     startEdit(){this.editTitle=this.curSection.title;this.editContent=this.curSection.content;this.editing=true},
     async saveEdit(){
@@ -352,6 +440,39 @@ createApp({
           if(n)this.say(`🔥 主播讲到「${this.curSection.title}」，有 ${n} 条话术该发了`);
         }
       }
+    },
+    deviceId(){let d=localStorage.getItem('lb_device');if(!d){d=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('lb_device',d)}return d},
+    myNick(){let n=localStorage.getItem('lb_nick');if(!n){n=(prompt('第一次投创意，起个昵称（比如：小张）')||'').trim();if(n)localStorage.setItem('lb_nick',n)}return n||this.roleName(this.role)},
+    markSeenIdeas(){if(this.ideas.length){this.seenIdea=Math.max(this.seenIdea,...this.ideas.map(d=>d.id));localStorage.setItem('lb_seen_idea',this.seenIdea)}},
+    voteCount(d){return this.ideaVotes.filter(v=>v.idea_id===d.id).length},
+    myVoted(d){return this.ideaVotes.some(v=>v.idea_id===d.id&&v.voter===this.deviceId())},
+    async addIdea(){
+      const t=this.draftIdea.trim();if(!t)return;
+      const nick=this.myNick();
+      await api('lb_ideas',{method:'POST',body:JSON.stringify({content:t,category:this.draftIdeaCat,nickname:nick,created_by:this.role})});
+      this.draftIdea='';this.say('已投进大厅 💡');this.refresh(true);
+    },
+    async toggleVote(d){
+      const me=this.deviceId();
+      if(this.myVoted(d)){await api(`lb_idea_votes?idea_id=eq.${d.id}&voter=eq.${me}`,{method:'DELETE'});
+        this.ideaVotes=this.ideaVotes.filter(v=>!(v.idea_id===d.id&&v.voter===me));}
+      else{await api('lb_idea_votes',{method:'POST',body:JSON.stringify({idea_id:d.id,voter:me})});
+        this.ideaVotes.push({idea_id:d.id,voter:me});}
+    },
+    async judgeIdea(d,st){
+      await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({status:st})});
+      d.status=st;this.say(st==='adopted'?'⭐ 已采用':'已标记不采纳');
+    },
+    async ideaToSection(d){
+      const maxPos=this.sections.length?Math.max(...this.sections.map(x=>x.pos)):0;
+      await api('lb_sections',{method:'POST',body:JSON.stringify({pos:maxPos+1,title:d.content.slice(0,12),content:d.content+'\n\n（创意来自：'+(d.nickname||this.roleName(d.created_by))+'）',show_id:this.activeShowId})});
+      await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({used_in:'已转入当前场讲稿'})});
+      d.used_in='已转入当前场讲稿';this.say('已转成当前场次的讲稿段落');this.refresh(true);
+    },
+    async ideaToTask(d){
+      await api('lb_tasks',{method:'POST',body:JSON.stringify({content:d.content,note:'来自创意大厅·'+(d.nickname||this.roleName(d.created_by)),created_by:this.role,show_id:this.activeShowId})});
+      await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({used_in:'已转入当前场话术'})});
+      d.used_in='已转入当前场话术';this.say('已转成当前场次的水军话术');this.refresh(true);
     },
     async switchShow(){
       await api('lb_meta?id=eq.1',{method:'PATCH',body:JSON.stringify({active_show_id:this.activeShowId,updated_at:new Date().toISOString()})});
@@ -383,15 +504,17 @@ createApp({
     async refresh(first){
       try{
         const sid=this.activeShowId||0;
-        const [secs,tasks,msgs,evs,meta,shows]=await Promise.all([
+        const [secs,tasks,msgs,evs,meta,shows,ideas,ivotes]=await Promise.all([
           api(`lb_sections?select=*&show_id=eq.${sid}`),
           api(`lb_tasks?select=*&show_id=eq.${sid}&order=status.desc,created_at.desc&limit=40`),
           api(`lb_messages?select=*&show_id=eq.${sid}&order=id.desc&limit=40`),
           api(`lb_events?select=*&show_id=eq.${sid}&order=id.desc&limit=10`),
           api('lb_meta?id=eq.1&select=*'),
           api('lb_shows?select=*&order=id.desc'),
+          api('lb_ideas?select=*&order=id.desc&limit=60'),
+          api('lb_idea_votes?select=*'),
         ]);
-        this.shows=shows;
+        this.shows=shows;this.ideas=ideas;this.ideaVotes=ivotes;
         const active=(meta[0]&&meta[0].active_show_id)||(shows[0]&&shows[0].id)||null;
         if(active!==this.activeShowId){this.activeShowId=active;this._lastCur=undefined;return this.refresh(true)}
         // 编辑中不覆盖正在输入的内容(老板端)
