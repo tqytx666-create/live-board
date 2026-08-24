@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>直播提示板</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1218">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="提示板">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');</script>
 <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
 <style>
 :root{--bg:#0f1218;--panel:#171c26;--panel2:#1e2532;--line:#2a3345;--txt:#e8ecf4;--dim:#8b96ab;--acc:#4da3ff;--gold:#ffb84d;--red:#ff5f6b;--green:#3ddc84;}
