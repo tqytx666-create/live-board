@@ -170,6 +170,7 @@ textarea{resize:vertical;min-height:70px}
     <template v-if="tab==='tasks'">
       <div class="mbody">
         <div class="card" v-for="t in tasks" :key="t.id" :class="{'task-sent':t.status==='sent'}">
+          <div v-if="t.note" style="font-size:12px;color:var(--gold);margin-bottom:5px">⏰ {{t.note}}</div>
           <div style="font-size:15px;line-height:1.5">{{t.content}}</div>
           <div style="font-size:12px;color:var(--dim);margin-top:6px">
             {{roleName(t.created_by)}} · {{fmtT(t.created_at)}}
@@ -179,6 +180,7 @@ textarea{resize:vertical;min-height:70px}
       </div>
       <div class="sendbox">
         <textarea v-model="draftTask" placeholder="写一条要水军发的话术…" style="min-height:56px"></textarea>
+        <input v-model="draftNote" placeholder="发送时机备注(可选,水军可见但不会被复制)">
         <div class="row"><button class="btn-gold" style="flex:1" @click="addTask">派发话术任务</button></div>
       </div>
     </template>
@@ -188,6 +190,7 @@ textarea{resize:vertical;min-height:70px}
       <div class="mbody">
         <div v-if="!tasks.length" style="color:var(--dim);text-align:center;padding:40px 0">暂无话术任务</div>
         <div class="card" v-for="t in tasks" :key="t.id" :class="{'task-sent':t.status==='sent'}">
+          <div v-if="t.note" style="font-size:13px;color:var(--gold);margin-bottom:6px">⏰ {{t.note}}</div>
           <div style="font-size:16px;line-height:1.6">{{t.content}}</div>
           <div style="font-size:12px;color:var(--dim);margin-top:6px">{{roleName(t.created_by)}} · {{fmtT(t.created_at)}}
             <span v-if="t.status==='sent'" style="color:var(--green)"> · ✅ 已发</span></div>
@@ -239,7 +242,7 @@ createApp({
   data(){return{
     role:localStorage.getItem('lb_role')||'',pass:'',loginErr:'',
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0},
-    tab:'',draftTask:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
+    tab:'',draftTask:'',draftNote:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
   }},
   computed:{
@@ -351,8 +354,8 @@ createApp({
     // ---- 话术任务 ----
     async addTask(){
       const t=this.draftTask.trim();if(!t)return;
-      await api('lb_tasks',{method:'POST',body:JSON.stringify({content:t,created_by:this.role})});
-      this.draftTask='';this.say('已派发给水军');this.refresh(true);
+      await api('lb_tasks',{method:'POST',body:JSON.stringify({content:t,note:this.draftNote.trim(),created_by:this.role})});
+      this.draftTask='';this.draftNote='';this.say('已派发给水军');this.refresh(true);
     },
     async copyTask(t){
       try{await navigator.clipboard.writeText(t.content);this.say('已复制，去直播间粘贴')}
