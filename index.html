@@ -103,9 +103,22 @@ textarea{resize:vertical;min-height:70px}
     </div>
     <div class="main">
       <div class="stage" v-if="curSection">
-        <div class="no">第 {{curIndex+1}} / {{sortedSections.length}} 段</div>
-        <h2>{{curSection.title}}</h2>
-        <div class="body">{{curSection.content}}</div>
+        <div class="no" style="display:flex;justify-content:space-between;align-items:center">
+          <span>第 {{curIndex+1}} / {{sortedSections.length}} 段</span>
+          <button class="logout" v-if="!editing" @click="startEdit">✏️ 编辑</button>
+        </div>
+        <template v-if="!editing">
+          <h2>{{curSection.title}}</h2>
+          <div class="body">{{curSection.content}}</div>
+        </template>
+        <template v-else>
+          <input v-model="editTitle" style="font-size:24px;font-weight:700;margin-bottom:12px" placeholder="段落标题">
+          <textarea v-model="editContent" style="font-size:20px;line-height:1.7;min-height:45vh" placeholder="要讲的内容…"></textarea>
+          <div style="display:flex;gap:10px;margin-top:12px">
+            <button class="btn-acc" style="padding:12px 32px;font-size:16px" @click="saveEdit">✅ 保存</button>
+            <button style="padding:12px 24px;font-size:16px" @click="editing=false">取消</button>
+          </div>
+        </template>
       </div>
       <div class="stage" v-else><h2 style="color:var(--dim)">暂无内容，等老板/经理编排脚本</h2></div>
       <div class="navbar">
@@ -174,7 +187,14 @@ textarea{resize:vertical;min-height:70px}
           <div style="font-size:15px;line-height:1.5">{{t.content}}</div>
           <div style="font-size:12px;color:var(--dim);margin-top:6px">
             {{roleName(t.created_by)}} · {{fmtT(t.created_at)}}
-            <span v-if="t.status==='sent'" style="color:var(--green)"> · ✅ 已发 {{fmtT(t.sent_at)}}</span>
+            <span v-if="t.status==='sent'" style="color:var(--green)"> · ✅ {{roleName(t.sent_by)}}已发 {{fmtT(t.sent_at)}}</span>
+          </div>
+          <div class="row" v-if="t.status==='pending'">
+            <button class="btn-acc" @click="copyTask(t)">📋 复制文案</button>
+            <button class="btn-green" @click="markSent(t)">✅ 我已发出</button>
+          </div>
+          <div class="row" v-else>
+            <button @click="copyTask(t)">📋 再复制一次</button>
           </div>
         </div>
       </div>
@@ -244,6 +264,7 @@ createApp({
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0},
     tab:'',draftTask:'',draftNote:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
+    editing:false,editTitle:'',editContent:'',
   }},
   computed:{
     sortedSections(){return [...this.sections].sort((a,b)=>a.pos-b.pos)},
@@ -267,6 +288,11 @@ createApp({
     markSeen(){
       if(this.tab==='msg'&&this.messages.length){this.seenMsg=Math.max(this.seenMsg,...this.messages.map(m=>m.id));localStorage.setItem('lb_seen_msg',this.seenMsg)}
       if(this.tab==='mytasks'&&this.tasks.length){this.seenTask=Math.max(this.seenTask,...this.tasks.map(t=>t.id));localStorage.setItem('lb_seen_task',this.seenTask)}
+    },
+    startEdit(){this.editTitle=this.curSection.title;this.editContent=this.curSection.content;this.editing=true},
+    async saveEdit(){
+      const s=this.curSection;s.title=this.editTitle;s.content=this.editContent;
+      await this.saveSection(s);this.editing=false;
     },
     logout(){
       clearInterval(this.timer);window.removeEventListener('keydown',this.onKey);
@@ -300,7 +326,8 @@ createApp({
           api('lb_meta?id=eq.1&select=*'),
         ]);
         // 编辑中不覆盖正在输入的内容(老板端)
-        if(!((this.role==='boss'||this.role==='manager')&&this.tab==='script'&&!first)) this.sections=secs;
+        const editingScript=((this.role==='boss'||this.role==='manager')&&this.tab==='script')||(this.role==='host'&&this.editing);
+        if(!(editingScript&&!first)) this.sections=secs;
         this.tasks=tasks;this.events=evs;this.meta=meta[0]||this.meta;
         if(this.messages.length&&msgs.length&&msgs[0].id!==this.lastMsgId&&!first){
           const fresh=msgs.filter(m=>m.id>this.lastMsgId&&m.role!==this.role);
@@ -363,7 +390,7 @@ createApp({
     },
     async markSent(t){
       await api(`lb_tasks?id=eq.${t.id}`,{method:'PATCH',body:JSON.stringify({status:'sent',sent_by:this.role,sent_at:new Date().toISOString()})});
-      await api('lb_messages',{method:'POST',body:JSON.stringify({role:'crew',kind:'sent',content:`✅ 已发出：${t.content.slice(0,40)}`})});
+      await api('lb_messages',{method:'POST',body:JSON.stringify({role:this.role,kind:'sent',content:`✅ 已发出：${t.content.slice(0,40)}`})});
       t.status='sent';this.say('已回报');this.refresh(true);
     },
     // ---- 消息 ----
