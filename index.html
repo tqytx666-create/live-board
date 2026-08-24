@@ -75,6 +75,9 @@ textarea{resize:vertical;min-height:70px}
 .sendbox{padding:10px;border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:8px}
 .sendbox .row{display:flex;gap:8px}
 .sendbox .row button{padding:11px 18px;font-size:15px;white-space:nowrap}
+.pagedots{display:flex;gap:10px;margin-top:26px}
+.pagedots span{width:12px;height:12px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
+.pagedots span.on{background:var(--gold);border-color:var(--gold)}
 .logout{padding:7px 12px;font-size:13px;color:var(--dim);border:1px solid var(--line);white-space:nowrap}
 .logout:active{color:var(--red);border-color:var(--red)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 22px;border-radius:24px;font-size:15px;z-index:99;backdrop-filter:blur(6px)}
@@ -104,16 +107,19 @@ textarea{resize:vertical;min-height:70px}
     <div class="main">
       <div class="stage" v-if="curSection">
         <div class="no" style="display:flex;justify-content:space-between;align-items:center">
-          <span>第 {{curIndex+1}} / {{sortedSections.length}} 段</span>
+          <span>第 {{curIndex+1}} / {{sortedSections.length}} 段<template v-if="pages.length>1"> · 第 {{curPage+1}} / {{pages.length}} 页</template></span>
           <button class="logout" v-if="!editing" @click="startEdit">✏️ 编辑</button>
         </div>
         <template v-if="!editing">
           <h2>{{curSection.title}}</h2>
-          <div class="body">{{curSection.content}}</div>
+          <div class="body">{{pages[curPage]||''}}</div>
+          <div class="pagedots" v-if="pages.length>1">
+            <span v-for="(p,i) in pages" :key="i" :class="{on:i===curPage}" @click="goPage(i)"></span>
+          </div>
         </template>
         <template v-else>
           <input v-model="editTitle" style="font-size:24px;font-weight:700;margin-bottom:12px" placeholder="段落标题">
-          <textarea v-model="editContent" style="font-size:20px;line-height:1.7;min-height:45vh" placeholder="要讲的内容…"></textarea>
+          <textarea v-model="editContent" style="font-size:20px;line-height:1.7;min-height:45vh" placeholder="要讲的内容…（单独一行写 --- 分页）"></textarea>
           <div style="display:flex;gap:10px;margin-top:12px">
             <button class="btn-acc" style="padding:12px 32px;font-size:16px" @click="saveEdit">✅ 保存</button>
             <button style="padding:12px 24px;font-size:16px" @click="editing=false">取消</button>
@@ -122,8 +128,8 @@ textarea{resize:vertical;min-height:70px}
       </div>
       <div class="stage" v-else><h2 style="color:var(--dim)">暂无内容，等老板/经理编排脚本</h2></div>
       <div class="navbar">
-        <button @click="nav(-1)">← 上一段</button>
-        <button class="next" @click="nav(1)">下一段 →（空格键）</button>
+        <button @click="nav(-1)">← 上一页</button>
+        <button class="next" @click="nav(1)">下一页 →（空格键）</button>
         <span class="hint">键盘 ←→ / 空格 翻页</span>
         <button class="logout" @click="logout">⏻ 退出</button>
       </div>
@@ -168,7 +174,7 @@ textarea{resize:vertical;min-height:70px}
             <span class="badge" :class="{cur:s.id===curId}">第{{i+1}}段 {{s.id===curId?'· 主播正在讲':''}}</span>
           </div>
           <input v-model="s.title" placeholder="段落标题" @change="saveSection(s)">
-          <textarea v-model="s.content" placeholder="要讲的内容…" @change="saveSection(s)"></textarea>
+          <textarea v-model="s.content" placeholder="要讲的内容…（单独一行写 --- 可给主播分页）" @change="saveSection(s)"></textarea>
           <div class="ops">
             <button @click="moveSec(s,-1)" :disabled="i===0">⬆️ 上移</button>
             <button @click="moveSec(s,1)" :disabled="i===sortedSections.length-1">⬇️ 下移</button>
@@ -271,6 +277,8 @@ createApp({
     curSection(){const s=this.sortedSections;if(!s.length)return null;
       return s.find(x=>x.pos===this.meta.current_pos)||s[0]},
     curId(){return this.curSection?this.curSection.id:null},
+    pages(){return this.curSection?this.curSection.content.split(/\n\s*-{3,}\s*\n/):[]},
+    curPage(){const p=this.meta.current_page||0;return Math.max(0,Math.min(p,this.pages.length-1))},
     curIndex(){return this.sortedSections.findIndex(s=>s.id===this.curId)},
     activeReorders(){return this.events.filter(e=>e.type==='reorder'&&e.status==='active')},
     myTabs(){
@@ -339,8 +347,18 @@ createApp({
       }catch(e){console.warn('sync fail',e)}
     },
     // ---- 主播 ----
-    async jumpTo(s){this.meta.current_pos=s.pos;await api('lb_meta?id=eq.1',{method:'PATCH',body:JSON.stringify({current_pos:s.pos,updated_at:new Date().toISOString()})})},
-    nav(d){const i=this.curIndex+d;const s=this.sortedSections;if(i<0||i>=s.length)return;this.jumpTo(s[i])},
+    async jumpTo(s,page=0){this.meta.current_pos=s.pos;this.meta.current_page=page;
+      await api('lb_meta?id=eq.1',{method:'PATCH',body:JSON.stringify({current_pos:s.pos,current_page:page,updated_at:new Date().toISOString()})})},
+    async goPage(i){this.meta.current_page=i;
+      await api('lb_meta?id=eq.1',{method:'PATCH',body:JSON.stringify({current_page:i,updated_at:new Date().toISOString()})})},
+    nav(d){
+      const s=this.sortedSections;
+      if(d>0&&this.curPage<this.pages.length-1){this.goPage(this.curPage+1);return}
+      if(d<0&&this.curPage>0){this.goPage(this.curPage-1);return}
+      const i=this.curIndex+d;if(i<0||i>=s.length)return;
+      if(d<0){const prevPages=s[i].content.split(/\n\s*-{3,}\s*\n/);this.jumpTo(s[i],prevPages.length-1)}
+      else this.jumpTo(s[i],0);
+    },
     async restoreEvent(ev){
       for(const p of ev.payload.prev||[])
         await api(`lb_sections?id=eq.${p.id}`,{method:'PATCH',body:JSON.stringify({pos:p.pos})});
