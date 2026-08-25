@@ -375,13 +375,21 @@ textarea{resize:vertical;min-height:70px;line-height:1.55}
         </div>
       </div>
       <div class="sendbox">
-        <textarea v-model="draftTask" placeholder="写一条要水军发的话术…" style="min-height:56px"></textarea>
-        <select v-model="draftSecId">
-          <option value="">🔗 不绑定阶段（随时可发）</option>
-          <option v-for="(s,i) in sortedSections" :key="s.id" :value="s.id">🔗 绑定第{{i+1}}段·{{s.title||'(未命名)'}}（主播讲到自动提醒）</option>
-        </select>
-        <input v-model="draftNote" placeholder="发送时机备注(可选,水军可见但不会被复制)">
-        <div class="row"><button class="btn-gold" style="flex:1" @click="addTask">派发话术任务</button></div>
+        <div class="row" v-if="!taskFormOpen">
+          <button class="btn-acc" style="flex:1;padding:11px 0;font-weight:500" @click="taskFormOpen=true">＋ 新建话术任务</button>
+        </div>
+        <template v-else>
+          <textarea v-model="draftTask" placeholder="写一条要水军发的话术…" style="min-height:80px"></textarea>
+          <select v-model="draftSecId">
+            <option value="">🔗 不绑定阶段（随时可发）</option>
+            <option v-for="(s,i) in sortedSections" :key="s.id" :value="s.id">🔗 绑定第{{i+1}}段·{{s.title||'(未命名)'}}（主播讲到自动提醒）</option>
+          </select>
+          <input v-model="draftNote" placeholder="发送时机备注(可选,水军可见但不会被复制)">
+          <div class="row">
+            <button class="btn-gold" style="flex:1" @click="addTask">派发话术任务</button>
+            <button @click="taskFormOpen=false">取消</button>
+          </div>
+        </template>
       </div>
     </template>
 
@@ -519,7 +527,7 @@ createApp({
   data(){return{
     role:localStorage.getItem('lb_role')||'',pass:'',loginErr:'',
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:+(localStorage.getItem('lb_show'))||null,newShowName:'',childParent:null,
-    tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',toast:'',timer:null,lastMsgId:0,inited:false,
+    tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',taskFormOpen:false,toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
     editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],draftIdea:'',draftIdeaCat:'话题',ideasOpen:false,cv:{tx:40,ty:30,s:1},selIdea:null,linkMode:null,childMenu:false,pendXY:null,ideaFormOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
   }},
@@ -835,7 +843,7 @@ createApp({
     async addTask(){
       const t=this.draftTask.trim();if(!t)return;
       await api('lb_tasks',{method:'POST',body:JSON.stringify({content:t,note:this.draftNote.trim(),section_id:this.draftSecId||null,created_by:this.role,show_id:this.activeShowId})});
-      this.draftTask='';this.draftNote='';this.draftSecId='';this.say('已派发给水军');this.refresh(true);
+      this.draftTask='';this.draftNote='';this.draftSecId='';this.taskFormOpen=false;this.say('已派发给水军');this.refresh(true);
     },
     async copyTask(t){
       try{await navigator.clipboard.writeText(t.content);this.say('已复制，去直播间粘贴')}
