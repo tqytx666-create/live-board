@@ -30,7 +30,7 @@ textarea{resize:vertical;min-height:70px}
 .login button{padding:14px 48px;font-size:18px;background:var(--acc);color:#fff}
 .login .err{color:var(--red);font-size:14px;height:18px}
 /* ---- 主播宽屏 ---- */
-.host{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) minmax(200px,260px);height:100dvh}
+.host{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) minmax(180px,230px);height:100dvh}
 .side .msg{font-size:12.5px;padding:6px 9px;border-radius:9px;line-height:1.45}
 .side .msg .who{font-size:10.5px;margin-bottom:1px}
 .side .feed{gap:5px;padding:4px 8px}
@@ -62,7 +62,10 @@ textarea{resize:vertical;min-height:70px}
 .restore p{font-size:14px;margin-bottom:10px}
 .restore button{background:var(--red);color:#fff;padding:10px 16px;font-size:15px;width:100%}
 .feed{padding:6px 10px;display:flex;flex-direction:column;gap:8px}
-.msg{background:var(--panel2);border-radius:12px;padding:10px 12px;font-size:15px;line-height:1.5}
+.msg{background:var(--panel2);border-radius:12px;padding:8px 10px;font-size:14px;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
+.msg .av{flex:none;font-size:15px;line-height:1.4}
+.msg .mtxt{flex:1;min-width:0;overflow-wrap:break-word}
+.msg .mtime{flex:none;font-size:9.5px;color:var(--dim);margin-top:3px}
 .msg .who{font-size:12px;color:var(--dim);margin-bottom:3px;display:flex;justify-content:space-between}
 .msg.urgent{background:#3a2530;border:1px solid var(--red)}
 .msg.urgent .who{color:var(--red);font-weight:700}
@@ -282,9 +285,10 @@ textarea{resize:vertical;min-height:70px}
       </div>
       <h3>聊天室</h3>
       <div class="feed" style="flex:1" ref="hostFeed">
-        <div v-for="m in messages" :key="m.id" class="msg" :class="[m.kind,{mine:m.role==='host'}]">
-          <div class="who"><span>{{roleName(m.role)}}{{m.kind==='urgent'?' · 紧急':''}}</span><span>{{fmtT(m.created_at)}}</span></div>
-          <div>{{m.content}}</div>
+        <div v-for="m in messages" :key="m.id" class="msg" :class="[m.kind,{mine:m.role===role}]">
+          <span class="av" :title="roleName(m.role)">{{avatar(m.role)}}</span>
+          <span class="mtxt">{{m.content}}</span>
+          <span class="mtime">{{fmtT(m.created_at)}}</span>
         </div>
       </div>
       <div class="sendbox">
@@ -458,9 +462,10 @@ textarea{resize:vertical;min-height:70px}
     <!-- 消息(所有幕后角色) -->
     <template v-if="tab==='msg'">
       <div class="mbody">
-        <div v-for="m in messages" :key="m.id" class="msg" :class="m.kind">
-          <div class="who"><span>{{roleName(m.role)}}{{m.kind==='urgent'?' · 紧急':''}}</span><span>{{fmtT(m.created_at)}}</span></div>
-          <div>{{m.content}}</div>
+        <div v-for="m in messages" :key="m.id" class="msg" :class="[m.kind,{mine:m.role===role}]">
+          <span class="av" :title="roleName(m.role)">{{avatar(m.role)}}</span>
+          <span class="mtxt">{{m.content}}</span>
+          <span class="mtime">{{fmtT(m.created_at)}}</span>
         </div>
       </div>
       <div class="sendbox">
@@ -701,6 +706,7 @@ createApp({
       this.newShowName='';this.enterShow(r[0]);
     },
     roleName(r){return NAMES[r]||r},
+    avatar(r){return {host:'🎤',boss:'👑',manager:'📋',crew:'🌊',system:'⚙️'}[r]||'💬'},
     fmtT(t){if(!t)return'';const d=new Date(t);return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`},
     say(t){this.toast=t;clearTimeout(this._tt);this._tt=setTimeout(()=>this.toast='',1800)},
     doLogin(){
