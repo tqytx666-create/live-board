@@ -63,7 +63,9 @@ textarea{resize:vertical;min-height:70px}
 .restore button{background:var(--red);color:#fff;padding:10px 16px;font-size:15px;width:100%}
 .feed{padding:6px 10px;display:flex;flex-direction:column;gap:8px}
 .msg{background:var(--panel2);border-radius:12px;padding:8px 10px;font-size:14px;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
-.msg .av{flex:none;font-size:15px;line-height:1.4}
+.msg .mname{flex:none;font-size:11.5px;color:var(--dim);margin-top:2px;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg.mine .mname{color:var(--acc)}
+.msg.urgent .mname{color:var(--red);font-weight:700}
 .msg .mtxt{flex:1;min-width:0;overflow-wrap:break-word}
 .msg .mtime{flex:none;font-size:9.5px;color:var(--dim);margin-top:3px}
 .msg .who{font-size:12px;color:var(--dim);margin-bottom:3px;display:flex;justify-content:space-between}
@@ -286,7 +288,7 @@ textarea{resize:vertical;min-height:70px}
       <h3>聊天室</h3>
       <div class="feed" style="flex:1" ref="hostFeed">
         <div v-for="m in messages" :key="m.id" class="msg" :class="[m.kind,{mine:m.role===role}]">
-          <span class="av" :title="roleName(m.role)">{{avatar(m.role)}}</span>
+          <span class="mname">{{m.nickname||roleName(m.role)}}：</span>
           <span class="mtxt">{{m.content}}</span>
           <span class="mtime">{{fmtT(m.created_at)}}</span>
         </div>
@@ -463,7 +465,7 @@ textarea{resize:vertical;min-height:70px}
     <template v-if="tab==='msg'">
       <div class="mbody">
         <div v-for="m in messages" :key="m.id" class="msg" :class="[m.kind,{mine:m.role===role}]">
-          <span class="av" :title="roleName(m.role)">{{avatar(m.role)}}</span>
+          <span class="mname">{{m.nickname||roleName(m.role)}}：</span>
           <span class="mtxt">{{m.content}}</span>
           <span class="mtime">{{fmtT(m.created_at)}}</span>
         </div>
@@ -658,7 +660,7 @@ createApp({
     async unNext(d){await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({next_id:null})});d.next_id=null;this.say('已断开顺序线')},
     async unlink(d){await api(`lb_ideas?id=eq.${d.id}`,{method:'PATCH',body:JSON.stringify({parent_id:null})});d.parent_id=null;this.say('已断开')},
     deviceId(){let d=localStorage.getItem('lb_device');if(!d){d=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('lb_device',d)}return d},
-    myNick(){let n=localStorage.getItem('lb_nick');if(!n){n=(prompt('第一次投创意，起个昵称（比如：小张）')||'').trim();if(n)localStorage.setItem('lb_nick',n)}return n||this.roleName(this.role)},
+    myNick(){let n=localStorage.getItem('lb_nick');if(!n){n=(prompt('第一次发言，起个昵称（比如：小张）')||'').trim();if(n)localStorage.setItem('lb_nick',n)}return n||this.roleName(this.role)},
     markSeenIdeas(){if(this.ideas.length){this.seenIdea=Math.max(this.seenIdea,...this.ideas.map(d=>d.id));localStorage.setItem('lb_seen_idea',this.seenIdea)}},
     voteCount(d){return this.ideaVotes.filter(v=>v.idea_id===d.id).length},
     myVoted(d){return this.ideaVotes.some(v=>v.idea_id===d.id&&v.voter===this.deviceId())},
@@ -821,13 +823,13 @@ createApp({
     },
     async markSent(t){
       await api(`lb_tasks?id=eq.${t.id}`,{method:'PATCH',body:JSON.stringify({status:'sent',sent_by:this.role,sent_at:new Date().toISOString()})});
-      await api('lb_messages',{method:'POST',body:JSON.stringify({role:this.role,kind:'sent',content:`✅ 已发出：${t.content.slice(0,40)}`,show_id:this.activeShowId})});
+      await api('lb_messages',{method:'POST',body:JSON.stringify({role:this.role,kind:'sent',content:`✅ 已发出：${t.content.slice(0,40)}`,nickname:this.myNick(),show_id:this.activeShowId})});
       t.status='sent';this.say('已回报');this.refresh(true);
     },
     // ---- 消息 ----
     async sendMsg(kind){
       const t=this.draftMsg.trim();if(!t)return;
-      await api('lb_messages',{method:'POST',body:JSON.stringify({role:this.role,kind,content:t,show_id:this.activeShowId})});
+      await api('lb_messages',{method:'POST',body:JSON.stringify({role:this.role,kind,content:t,nickname:this.myNick(),show_id:this.activeShowId})});
       this.draftMsg='';this.refresh(true);
     },
   },
