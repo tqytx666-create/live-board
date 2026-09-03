@@ -153,7 +153,14 @@ textarea{resize:vertical;min-height:70px;line-height:1.55}
 .showcard:hover,.showcard:active{transform:translateY(-1px);box-shadow:0 12px 32px -10px rgba(0,0,0,.2)}
 .ideas-overlay{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;max-width:760px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(29,29,31,.92);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);color:#fff;padding:10px 22px;border-radius:var(--pill);font-size:14px;z-index:99;box-shadow:0 8px 30px rgba(0,0,0,.3)}
-@media(max-width:900px){.host{grid-template-columns:1fr}.col{display:none}.side{display:none}.stage h2{font-size:26px}.stage .body{font-size:20px}}
+.narrowbtn{display:none}
+@media(max-width:900px){
+.host{grid-template-columns:1fr}
+.col{display:none}.side{display:none}
+.col.open{display:block;position:fixed;left:0;top:0;bottom:0;width:min(80vw,300px);z-index:80;box-shadow:8px 0 32px rgba(0,0,0,.18);background:#fff}
+.side.open{display:flex;position:fixed;right:0;top:0;bottom:0;width:min(85vw,330px);z-index:80;box-shadow:-8px 0 32px rgba(0,0,0,.18);background:#fff}
+.narrowbtn{display:inline-block}
+.stage h2{font-size:26px}.stage .body{font-size:20px}}
 </style>
 </head>
 <body>
@@ -184,7 +191,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.55}
 
   <!-- ============ 主播 ============ -->
   <div class="host" v-else-if="role==='host'">
-    <div class="col">
+    <div class="col" :class="{open:showCol}" @click="showCol=false">
       <div style="padding:10px 10px 0;display:flex;flex-direction:column;gap:6px">
         <div style="font-size:13px;color:var(--gold);font-weight:600;padding:0 4px">🎬 {{curShowTitle}}</div>
         <button class="logout" @click="backHome">⇄ 切换场次</button>
@@ -223,6 +230,8 @@ textarea{resize:vertical;min-height:70px;line-height:1.55}
         <button @click="nav(-1)">← 上一页</button>
         <button class="next" @click="nav(1)">下一页 →（空格键）</button>
         <span class="hint">键盘 ←→ / 空格 翻页</span>
+        <button class="logout narrowbtn" @click="showCol=!showCol;showSide=false">📑 流程</button>
+        <button class="logout narrowbtn" @click="showSide=!showSide;showCol=false">💬 消息</button>
         <button class="logout" @click="ideasOpen=true">💡 创意<span class="nbadge" v-if="badgeFor('ideas')" style="position:static;margin-left:4px">{{badgeFor('ideas')}}</span></button>
         <button class="logout" @click="logout">⏻ 退出</button>
       </div>
@@ -300,7 +309,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.55}
       </div>
       </div>
     </div>
-    <div class="side">
+    <div class="side" :class="{open:showSide}">
       <div class="restore" v-for="ev in activeReorders" :key="ev.id">
         <p>⚠️ <b>{{roleName(ev.actor)}}</b> 调整了讲稿（{{fmtT(ev.created_at)}}）<br>{{ev.payload.desc||''}}</p>
         <button @click="restoreEvent(ev)">↩️ 不合理，恢复原方案</button>
@@ -529,7 +538,7 @@ createApp({
     sections:[],tasks:[],messages:[],events:[],meta:{current_pos:0,current_page:0},shows:[],activeShowId:+(localStorage.getItem('lb_show'))||null,newShowName:'',childParent:null,
     tab:'',draftTask:'',draftNote:'',draftSecId:'',draftMsg:'',taskFormOpen:false,toast:'',timer:null,lastMsgId:0,inited:false,
     seenMsg:+(localStorage.getItem('lb_seen_msg')||0),seenTask:+(localStorage.getItem('lb_seen_task')||0),
-    editing:false,editTitle:'',editContent:'',ideas:[],ideaVotes:[],draftIdea:'',draftIdeaCat:'话题',ideasOpen:false,cv:{tx:40,ty:30,s:1},selIdea:null,linkMode:null,childMenu:false,pendXY:null,ideaFormOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
+    editing:false,editTitle:'',editContent:'',showCol:false,showSide:false,ideas:[],ideaVotes:[],draftIdea:'',draftIdeaCat:'话题',ideasOpen:false,cv:{tx:40,ty:30,s:1},selIdea:null,linkMode:null,childMenu:false,pendXY:null,ideaFormOpen:false,seenIdea:+(localStorage.getItem('lb_seen_idea')||0),
   }},
   computed:{
     sortedSections(){return [...this.sections].sort((a,b)=>a.pos-b.pos)},
