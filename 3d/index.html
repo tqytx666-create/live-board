@@ -1,0 +1,11 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>看直播 3D</title>
+<style>html,body{margin:0;height:100%;background:#0d1417;color:#e4efed;font:16px -apple-system,"PingFang SC",sans-serif;display:grid;place-items:center;text-align:center}p{color:#93a9a6;font-size:14px;margin:8px 24px}a{color:#f2b134}</style></head>
+<body><div><b>看直播 3D</b><p id="m">正在找当前的地址…</p></div>
+<script>
+// 固定入口（南哥 10-06）：电脑上的外网通道每小时换一次网址，最新网址写在 url.json，这里读到就跳过去
+fetch('url.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(j=>{
+ if(!j.url){document.getElementById('m').textContent='电脑上的服务没开';return}
+ const age=(Date.now()-j.t)/60000;
+ if(age>75){document.getElementById('m').innerHTML='地址已经 '+Math.round(age)+' 分钟没更新，电脑可能关了或断网。<br><a href="'+j.url+'">还是试一下</a>';return}
+ location.replace(j.url)}).catch(()=>{document.getElementById('m').textContent='读不到地址，稍后刷新'});
+</script></body></html>
